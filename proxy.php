@@ -1,46 +1,34 @@
 <?php
-// Configurações básicas
-$destino = 'https://gnomo.esy.es'; // URL de destino, passada como parâmetro na query string
+// URL do servidor de destino
+$targetUrl = 'http://seu_servidor_destino.com';
 
-// Validação da URL de destino (adicione mais verificações conforme necessário)
-if (filter_var($destino, FILTER_VALIDATE_URL) === false) {
-    http_response_code(400); // Bad Request
-    exit('URL de destino inválida.');
-}
+// Obtém a solicitação do cliente
+$requestHeaders = getallheaders();
+$requestMethod = $_SERVER['REQUEST_METHOD'];
+$requestUri = $_SERVER['REQUEST_URI'];
+$requestBody = file_get_contents('php://input');
 
-// Inicia a solicitação cURL
-$ch = curl_init($destino);
+// Cria a solicitação para o servidor de destino
+$context = stream_context_create([
+    'http' => [
+        'method' => $requestMethod,
+        'header' => implode("\r\n", array_map(function ($key, $value) {
+            return "$key: $value";
+        }, array_keys($requestHeaders), $requestHeaders)),
+        'content' => $requestBody,
+    ],
+]);
 
-// Configuração de opções cURL
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_HEADER, false);
+$targetResponse = file_get_contents("$targetUrl$requestUri", false, $context);
 
-// Adiciona cabeçalhos extras conforme necessário (exemplo: proxy de usuário)
-// curl_setopt($ch, CURLOPT_HTTPHEADER, ['User-Agent: MeuProxyPHP']);
+// Obtém informações sobre a resposta do servidor de destino
+$targetResponseHeaders = $http_response_header;
+$targetResponseBody = $targetResponse;
 
-// Executa a solicitação cURL
-$resposta = curl_exec($ch);
-
-// Verifica se houve algum erro na solicitação cURL
-if (curl_errno($ch)) {
-    http_response_code(500); // Internal Server Error
-    exit('Erro ao processar a solicitação.');
-}
-
-// Obtém informações sobre a solicitação cURL (cabeçalhos, código de status, etc.)
-$info = curl_getinfo($ch);
-
-// Define os cabeçalhos da resposta com base nos cabeçalhos recebidos do servidor de destino
-foreach ($info['request_header'] as $header) {
+// Envia os cabeçalhos da resposta para o cliente
+foreach ($targetResponseHeaders as $header) {
     header($header);
 }
 
-// Define o código de status da resposta com base no código de status recebido do servidor de destino
-http_response_code($info['http_code']);
-
-// Exibe o conteúdo da resposta
-echo $resposta;
-
-// Fecha a sessão cURL
-curl_close($ch);
-?>
+// Envia o corpo da resposta para o cliente
+echo $targetResponseBody;
